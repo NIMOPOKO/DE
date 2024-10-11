@@ -19,7 +19,7 @@
  * The maximal budget for evaluations done by an optimization algorithm equals dimension * BUDGET_MULTIPLIER.
  * Increase the budget multiplier value gradually to see how it affects the runtime.
  */
-static const unsigned int BUDGET_MULTIPLIER = 2;
+static const unsigned int BUDGET_MULTIPLIER = 10000;
 
 /**
  * The maximal number of independent restarts allowed for an algorithm that restarts itself.
@@ -190,47 +190,52 @@ void example_experiment(const char *suite_name,
 
   /* Iterate over all problems in the suite */
   while ((PROBLEM = coco_suite_get_next_problem(suite, observer)) != NULL) {
+    //size_t function_id = coco_problem_get_suite_dep_index(PROBLEM);
+    // if(function_id == 0){
+      size_t dimension = coco_problem_get_dimension(PROBLEM);
+      if(dimension <= 10){
+        /* Run the algorithm at least once */
+        for (run = 1; run <= 1 + INDEPENDENT_RESTARTS; run++) {
+          long evaluations_done = (long) (coco_problem_get_evaluations(PROBLEM) +
+                coco_problem_get_evaluations_constraints(PROBLEM));
+          long evaluations_remaining = (long) (dimension * BUDGET_MULTIPLIER) - evaluations_done;
 
-    size_t dimension = coco_problem_get_dimension(PROBLEM);
+          /* Break the loop if the target was hit or there are no more remaining evaluations */
+          if ((coco_problem_final_target_hit(PROBLEM) &&
+              coco_problem_get_number_of_constraints(PROBLEM) == 0)
+              || (evaluations_remaining <= 0))
+            break;
 
-    /* Run the algorithm at least once */
-    for (run = 1; run <= 1 + INDEPENDENT_RESTARTS; run++) {
+          /* Call the optimization algorithm for the remaining number of evaluations */
+          my_de_nopcm(evaluate_function,
+                          evaluate_constraint,
+                          dimension,
+                          coco_problem_get_number_of_objectives(PROBLEM),
+                          coco_problem_get_number_of_constraints(PROBLEM),
+                          coco_problem_get_smallest_values_of_interest(PROBLEM),
+                          coco_problem_get_largest_values_of_interest(PROBLEM),
+                          coco_problem_get_number_of_integer_variables(PROBLEM),
+                          (size_t) evaluations_remaining,
+                          random_generator);
 
-      long evaluations_done = (long) (coco_problem_get_evaluations(PROBLEM) +
-            coco_problem_get_evaluations_constraints(PROBLEM));
-      long evaluations_remaining = (long) (dimension * BUDGET_MULTIPLIER) - evaluations_done;
-
-      /* Break the loop if the target was hit or there are no more remaining evaluations */
-      if ((coco_problem_final_target_hit(PROBLEM) &&
-           coco_problem_get_number_of_constraints(PROBLEM) == 0)
-           || (evaluations_remaining <= 0))
-        break;
-
-      /* Call the optimization algorithm for the remaining number of evaluations */
-      my_de_nopcm(evaluate_function,
-                       evaluate_constraint,
-                       dimension,
-                       coco_problem_get_number_of_objectives(PROBLEM),
-                       coco_problem_get_number_of_constraints(PROBLEM),
-                       coco_problem_get_smallest_values_of_interest(PROBLEM),
-                       coco_problem_get_largest_values_of_interest(PROBLEM),
-                       coco_problem_get_number_of_integer_variables(PROBLEM),
-                       (size_t) evaluations_remaining,
-                       random_generator);
-
-      /* Break the loop if the algorithm performed no evaluations or an unexpected thing happened */
-      if (coco_problem_get_evaluations(PROBLEM) == evaluations_done) {
-        printf("WARNING: Budget has not been exhausted (%lu/%lu evaluations done)!\n",
-        		(unsigned long) evaluations_done, (unsigned long) dimension * BUDGET_MULTIPLIER);
-        break;
+          /* Break the loop if the algorithm performed no evaluations or an unexpected thing happened */
+          if (coco_problem_get_evaluations(PROBLEM) == evaluations_done) {
+            printf("WARNING: Budget has not been exhausted (%lu/%lu evaluations done)!\n",
+                (unsigned long) evaluations_done, (unsigned long) dimension * BUDGET_MULTIPLIER);
+            break;
+          }
+          else if (coco_problem_get_evaluations(PROBLEM) < evaluations_done)
+            coco_error("Something unexpected happened - function evaluations were decreased!");
+        }
       }
-      else if (coco_problem_get_evaluations(PROBLEM) < evaluations_done)
-        coco_error("Something unexpected happened - function evaluations were decreased!");
-    }
-
-    /* Keep track of time */
-    timing_data_time_problem(timing_data, PROBLEM);
+      /* Keep track of time */
+      timing_data_time_problem(timing_data, PROBLEM);
+    //}
+    // else{
+    //   break;
+    // }
   }
+  // }
 
   /* Output and finalize the timing data */
   timing_data_finalize(timing_data);
@@ -453,26 +458,30 @@ void my_de_nopcm(evaluate_function_t evaluate_func,
   size_t population_size = N; // 通常、10倍のサイズを使用
   double F = 0.5; // スケーリングファクター
   double CR = 0.9; // クロスオーバー確率
-  size_t REPAIR = 0;//0:lamarckian,1:baldwinian
+  size_t REPAIR = 1;//0:lamarckian,1:baldwinian
   double **population = (double**)malloc(population_size * sizeof(double*));
   double *functions_values = coco_allocate_vector(number_of_objectives);
   double *constraints_values = NULL;
-  double *trial = coco_allocate_vector(dimension);
+  double **trial = (double**)malloc(population_size * sizeof(double*));
   double *mutate = coco_allocate_vector(dimension);
   double *rnd_vals = coco_allocate_vector(dimension);
   double *cons_values = NULL;
   size_t evaluation = 0;
   size_t i, j;
   int vector[3];
-  double value_population = 0;
+  double value_population[population_size];
   double value_trial = 0;
+
+  // double bsf = 1000000000;
 
   for (i = 0; i < population_size; i++) {
         population[i] = coco_allocate_vector(dimension);
+        trial[i] = coco_allocate_vector(dimension);
         if (population[i] == NULL) {
             printf("メモリの確保に失敗しました。\n");
         }
-    }
+  }
+
   if (number_of_constraints > 0 )
     constraints_values = coco_allocate_vector(number_of_constraints);
 
@@ -487,7 +496,25 @@ void my_de_nopcm(evaluate_function_t evaluate_func,
         }
       }
     }
+    evaluate_func(population[i], functions_values);
+    evaluation++;
+    value_population[i] = functions_values[0];
+    // if(fabs(value_population) < bsf){
+    //   bsf = fabs(value_population);
+    // }
   }
+  // printf("\n");
+  // for (i = 0; i < population_size; i++) {
+  //   for (j = 0; j < dimension; j++) {
+  //     printf("%lf ",population[i][j]);
+  //   }
+  //   printf("%s\n",coco_problem_get_name(PROBLEM));
+  //   evaluate_func(population[i], functions_values);
+  //   evaluation++;
+  //   value_population = functions_values[0];
+  //   printf(" value:%lf\n",functions_values[0]);
+  //   printf("\n");
+  // }
 
   while(evaluation  < max_budget){
     for(i = 0; i < population_size; i++){
@@ -500,7 +527,7 @@ void my_de_nopcm(evaluate_function_t evaluate_func,
       do {
           vector[2] = rand() % N;
       } while (vector[2] == vector[0] || vector[2] == vector[1]);
-
+      //printf("vector:%d,%d,%d\n",vector[0],vector[1],vector[2]);
       //mutation
       for (j = 0; j < dimension; j++) {
         mutate[j] = population[vector[0]][j] + F * (population[vector[1]][j] - population[vector[2]][j]);
@@ -528,28 +555,44 @@ void my_de_nopcm(evaluate_function_t evaluate_func,
       // Perform binomial crossover
       for (j = 0; j < dimension; j++) {
           if (rnd_vals[j] <= CR) {
-              trial[j] = mutate[j];
+              trial[i][j] = mutate[j];
           } else {
-              trial[j] = population[i][j];
+              trial[i][j] = population[i][j];
           }
       }
-
-      //evaluation population
-      if(number_of_constraints > 0 )
-        evaluate_cons(population[i], cons_values);
-      evaluate_func(population[i], functions_values);
-      evaluation++;
-      value_population = functions_values[0];
-      evaluate_func(trial, functions_values);
+    }
+    if(number_of_constraints > 0 ){
+      evaluate_cons(population[i], cons_values);
+    }
+    //evaluation population
+    for(i = 0; i < population_size; i++){
+      evaluate_func(trial[i], functions_values);
       evaluation++;
       value_trial = functions_values[0];
-      if(value_trial <= value_population){
+      // if(value_trial < bsf){
+      //   bsf = value_trial;
+      // }
+      // if(value_trial < 0){
+      //   printf("bug\n");
+      //   break;
+      // }
+      if(value_trial <= value_population[i]){
         for (j = 0; j < dimension; j++) {
-          population[i][j] = trial[j];
+          population[i][j] = trial[i][j];
+          value_population[i] = value_trial;
+          //printf("%lf ",population[i][j]);
         }
+        //printf(" value:%lf\n",value_trial);
       }
+      //printf("\n");
     }
+    // if(bsf < 1e-8){
+    //   printf("bsf:%lf\n",bsf);
+    //   break;
+    // }
   }
+  //printf("bsf:%lf\n",bsf);
+  // printf("evaluation%ld\n",evaluation);
   for (i = 0; i < population_size; ++i) {
     coco_free_memory(population[i]);
   }
