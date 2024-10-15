@@ -523,25 +523,27 @@ void my_de_nopcm(evaluate_function_t evaluate_func,
     constraints_values = coco_allocate_vector(number_of_constraints);
 
   //initialization
+  //printf("aaa\n\n");
   for (i = 0; i < population_size; i++) {
     for (j = 0; j < dimension; j++) {
       double range = upper_bounds[j] - lower_bounds[j];
+      //printf("%f:%f\n",upper_bounds[j],lower_bounds[j]);
       population[i][j] = lower_bounds[j] + coco_random_uniform(random_generator) * range;
       if (j < number_of_integer_variables){
         // if(REPAIR == 0){
         //   population[i][j] = floor(population[i][j] + 0.5);
         // }
       }
-      printf("%lf ",population[i][j]);
+      //printf("%lf ",population[i][j]);
     }
-    printf("aaa\n");
+    // printf("aaa\n");
     if(REPAIR == 0){
       round_vec(population[i],dimension);
     }
-    for (j = 0; j < dimension; j++) {
-      printf("%lf ",population[i][j]);
-    }
-    printf("bbb\n");
+    // for (j = 0; j < dimension; j++) {
+    //   printf("%lf ",population[i][j]);
+    // }
+    // printf("bbb\n");
     evaluate_func(population[i], functions_values);
     evaluation++;
     value_population[i] = functions_values[0];
