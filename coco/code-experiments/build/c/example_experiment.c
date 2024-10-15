@@ -14,7 +14,8 @@
 #include "coco.h"
 
 #define max(a,b) ((a) > (b) ? (a) : (b))
-
+#define N 100
+#define REPAIR 0//0:lamarckian,1:baldwinian
 /**
  * The maximal budget for evaluations done by an optimization algorithm equals dimension * BUDGET_MULTIPLIER.
  * Increase the budget multiplier value gradually to see how it affects the runtime.
@@ -29,7 +30,7 @@ static const long INDEPENDENT_RESTARTS = 1e5;
 /**
  * The random seed. Change if needed.
  */
-static const uint32_t RANDOM_SEED = 0xdeadbeef;
+static const uint32_t RANDOM_SEED = 1;
 
 /**
  * A function type for evaluation functions, where the first argument is the vector to be evaluated and the
@@ -149,7 +150,12 @@ int main(void) {
    * http://numbbo.github.io/coco-doc/C/#suite-parameters and
    * http://numbbo.github.io/coco-doc/C/#observer-parameters. */
 
-  example_experiment("bbob-mixint", "", "bbob-mixint", "result_folder: RS_on_bbob", random_generator);
+  if(REPAIR == 0){
+    example_experiment("bbob-mixint", "", "bbob-mixint", "result_folder:lamarckian", random_generator);
+  }
+  else{
+    example_experiment("bbob-mixint", "", "bbob-mixint", "result_folder:baldwinian", random_generator);
+  }
 
   printf("Done!\n");
   fflush(stdout);
@@ -192,8 +198,10 @@ void example_experiment(const char *suite_name,
   while ((PROBLEM = coco_suite_get_next_problem(suite, observer)) != NULL) {
     //size_t function_id = coco_problem_get_suite_dep_index(PROBLEM);
     // if(function_id == 0){
+      const char *function_name = coco_problem_get_name(PROBLEM);
       size_t dimension = coco_problem_get_dimension(PROBLEM);
-      if(dimension <= 10){
+      //printf("%s\n",function_name);
+      if(strstr(function_name, "f001") != NULL) {
         /* Run the algorithm at least once */
         for (run = 1; run <= 1 + INDEPENDENT_RESTARTS; run++) {
           long evaluations_done = (long) (coco_problem_get_evaluations(PROBLEM) +
@@ -425,6 +433,38 @@ void my_grid_search(evaluate_function_t evaluate_func,
   coco_free_memory(max_nodes);
 }
 
+void round_vec(double population[],size_t dimention_size){
+  double y[16] = {0};
+  double y_star;
+  int  cnt = 0;
+  int l[5] = {2,4,8,16,-5};
+
+  for(int i = 0; i < dimention_size; i++){
+    if(cnt != 4){
+        // 補助値を計算
+        for(int  j = 0; j < l[cnt]; j++){
+            y[j] = j;
+        }
+
+        //連続値に最も近い補助値 y^* を求める
+        double min_dist = fabs(y[0] - population[i]);
+        y_star = y[0];
+        for (int j = 1; j < l[cnt]; j++) {
+            double dist = fabs(y[j] - population[i]);
+            if (dist <= min_dist) {
+                min_dist = dist;
+                y_star = y[j];
+            }
+        }
+        //printf("%lf->%lf\n",population[i],y_star);
+        population[i] = y_star;
+    }
+    cnt++;
+    if(cnt == 5){
+        cnt = 0;
+    }
+  }
+}
 
 /**
  * A random search algorithm that can be used for single- as well as multi-objective optimization. The
@@ -443,8 +483,6 @@ void my_grid_search(evaluate_function_t evaluate_func,
  * @param random_generator Pointer to a random number generator able to produce uniformly and normally
  * distributed random numbers.
  */
-#define N 100
-#define METHOD 0
 void my_de_nopcm(evaluate_function_t evaluate_func,
                       evaluate_function_t evaluate_cons,
                       const size_t dimension,
@@ -458,7 +496,6 @@ void my_de_nopcm(evaluate_function_t evaluate_func,
   size_t population_size = N; // 通常、10倍のサイズを使用
   double F = 0.5; // スケーリングファクター
   double CR = 0.9; // クロスオーバー確率
-  size_t REPAIR = 1;//0:lamarckian,1:baldwinian
   double **population = (double**)malloc(population_size * sizeof(double*));
   double *functions_values = coco_allocate_vector(number_of_objectives);
   double *constraints_values = NULL;
@@ -491,11 +528,20 @@ void my_de_nopcm(evaluate_function_t evaluate_func,
       double range = upper_bounds[j] - lower_bounds[j];
       population[i][j] = lower_bounds[j] + coco_random_uniform(random_generator) * range;
       if (j < number_of_integer_variables){
-        if(REPAIR == 0){
-          population[i][j] = floor(population[i][j] + 0.5);
-        }
+        // if(REPAIR == 0){
+        //   population[i][j] = floor(population[i][j] + 0.5);
+        // }
       }
+      printf("%lf ",population[i][j]);
     }
+    printf("aaa\n");
+    if(REPAIR == 0){
+      round_vec(population[i],dimension);
+    }
+    for (j = 0; j < dimension; j++) {
+      printf("%lf ",population[i][j]);
+    }
+    printf("bbb\n");
     evaluate_func(population[i], functions_values);
     evaluation++;
     value_population[i] = functions_values[0];
@@ -519,13 +565,13 @@ void my_de_nopcm(evaluate_function_t evaluate_func,
   while(evaluation  < max_budget){
     for(i = 0; i < population_size; i++){
       //selection
-      vector[0] = rand() % N;
+      vector[0] = (int)(coco_random_uniform(random_generator)*N);
       do {
-          vector[1] = rand() % N;
+          vector[1] = (int)(coco_random_uniform(random_generator)*N);
       } while (vector[1] == vector[0]);
 
       do {
-          vector[2] = rand() % N;
+          vector[2] = (int)(coco_random_uniform(random_generator)*N);
       } while (vector[2] == vector[0] || vector[2] == vector[1]);
       //printf("vector:%d,%d,%d\n",vector[0],vector[1],vector[2]);
       //mutation
@@ -542,11 +588,11 @@ void my_de_nopcm(evaluate_function_t evaluate_func,
       }
 
       //crossover
-      int j_rand = rand() % (int)dimension;  // j_rand is a random index between 0 and dim-1
+      int j_rand = (int)(coco_random_uniform(random_generator)*(int)dimension);// j_rand is a random index between 0 and dim-1
 
       // Generate random values between 0 and 1
       for (j = 0; j < dimension; j++) {
-          rnd_vals[j] = (double)rand() / RAND_MAX;
+          rnd_vals[j] = coco_random_uniform(random_generator);
       }
 
       // Set rnd_vals[j_rand] to 0.0
@@ -559,6 +605,9 @@ void my_de_nopcm(evaluate_function_t evaluate_func,
           } else {
               trial[i][j] = population[i][j];
           }
+      }
+      if(REPAIR == 0){
+        round_vec(trial[i],dimension);
       }
     }
     if(number_of_constraints > 0 ){
