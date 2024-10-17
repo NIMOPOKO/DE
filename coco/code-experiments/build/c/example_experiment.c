@@ -16,6 +16,9 @@
 #define max(a,b) ((a) > (b) ? (a) : (b))
 #define N 100
 #define REPAIR 0//0:lamarckian,1:baldwinian
+#define TITLE "5D-lamarckian-.txt"
+#define D 5
+int instance_cnt = 0;
 /**
  * The maximal budget for evaluations done by an optimization algorithm equals dimension * BUDGET_MULTIPLIER.
  * Increase the budget multiplier value gradually to see how it affects the runtime.
@@ -201,7 +204,7 @@ void example_experiment(const char *suite_name,
       const char *function_name = coco_problem_get_name(PROBLEM);
       size_t dimension = coco_problem_get_dimension(PROBLEM);
       //printf("%s\n",function_name);
-      if(strstr(function_name, "f001") != NULL) {
+      if(strstr(function_name, "f001") != NULL && dimension == D) {
         /* Run the algorithm at least once */
         for (run = 1; run <= 1 + INDEPENDENT_RESTARTS; run++) {
           long evaluations_done = (long) (coco_problem_get_evaluations(PROBLEM) +
@@ -502,7 +505,12 @@ void my_de_nopcm(evaluate_function_t evaluate_func,
   int vector[3];
   double value_population[population_size];
   double value_trial = 0;
-
+  FILE *fp;
+  char titlestr[30] = TITLE;
+  char num[30];
+  sprintf(num, "%d", instance_cnt);
+  strcat(titlestr,num);
+  fp = fopen(titlestr, "w");
   // double bsf = 1000000000;
 
   for (i = 0; i < population_size; i++) {
@@ -565,6 +573,13 @@ void my_de_nopcm(evaluate_function_t evaluate_func,
   // }
 
   while(evaluation  < max_budget){
+    for(i = 0; i < population_size; i++){
+      for(j = 0; j < dimension; j++){
+        fprintf(fp,"%lf ",population[i][j]);
+      }
+      fprintf(fp,"\n");
+    }
+    fprintf(fp,"\n");
     for(i = 0; i < population_size; i++){
       //selection
       vector[0] = (int)(coco_random_uniform(random_generator)*N);
@@ -642,6 +657,8 @@ void my_de_nopcm(evaluate_function_t evaluate_func,
     //   break;
     // }
   }
+  instance_cnt++;
+  fclose(fp);
   //printf("bsf:%lf\n",bsf);
   // printf("evaluation%ld\n",evaluation);
   for (i = 0; i < population_size; ++i) {
