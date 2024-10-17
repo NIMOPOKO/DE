@@ -6,6 +6,7 @@
 #include <limits.h>
 #include "coco.h"
 
+
 #define N 100 //集団の個体数、推奨値 5*Dから10*Dです
 #define D 20//個体の次元
 #define F 0.5 // 差分突然変異におけるスケール係数
