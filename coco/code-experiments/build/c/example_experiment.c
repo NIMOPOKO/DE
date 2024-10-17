@@ -30,7 +30,7 @@ static const long INDEPENDENT_RESTARTS = 1e5;
 /**
  * The random seed. Change if needed.
  */
-static const uint32_t RANDOM_SEED = 1;
+static const uint32_t RANDOM_SEED = 0xdeadbeef;
 
 /**
  * A function type for evaluation functions, where the first argument is the vector to be evaluated and the
@@ -433,35 +433,29 @@ void my_grid_search(evaluate_function_t evaluate_func,
   coco_free_memory(max_nodes);
 }
 
-void round_vec(double population[],size_t dimention_size){
+void round_vec(double population[], size_t dimention_size, const double lower_bounds[], const double upper_bounds[]){
   double y[16] = {0};
   double y_star;
-  int  cnt = 0;
-  int l[5] = {2,4,8,16,-5};
 
   for(int i = 0; i < dimention_size; i++){
-    if(cnt != 4){
-        // 補助値を計算
-        for(int  j = 0; j < l[cnt]; j++){
-            y[j] = j;
-        }
+    if(upper_bounds[i] != 5){
+      // 補助値を計算
+      for(int  j = 0; j <= (int)upper_bounds[i]; j++){
+          y[j] = j;
+      }
 
-        //連続値に最も近い補助値 y^* を求める
-        double min_dist = fabs(y[0] - population[i]);
-        y_star = y[0];
-        for (int j = 1; j < l[cnt]; j++) {
-            double dist = fabs(y[j] - population[i]);
-            if (dist <= min_dist) {
-                min_dist = dist;
-                y_star = y[j];
-            }
-        }
-        //printf("%lf->%lf\n",population[i],y_star);
-        population[i] = y_star;
-    }
-    cnt++;
-    if(cnt == 5){
-        cnt = 0;
+      //連続値に最も近い補助値 y^* を求める
+      double min_dist = fabs(y[0] - population[i]);
+      y_star = y[0];
+      for (int j = 1; j <= (int)upper_bounds[i]; j++) {
+          double dist = fabs(y[j] - population[i]);
+          if (dist <= min_dist) {
+              min_dist = dist;
+              y_star = y[j];
+          }
+      }
+      //printf("%lf->%lf\n",population[i],y_star);
+      population[i] = y_star;
     }
   }
 }
@@ -523,8 +517,13 @@ void my_de_nopcm(evaluate_function_t evaluate_func,
     constraints_values = coco_allocate_vector(number_of_constraints);
 
   //initialization
-  //printf("aaa\n\n");
   for (i = 0; i < population_size; i++) {
+    // printf("bound:");
+    // for (j = 0; j < dimension; j++) {
+    //   printf("%lf ",upper_bounds[j]);
+    // }
+    // printf("\n");
+    // printf("beforepop:");
     for (j = 0; j < dimension; j++) {
       double range = upper_bounds[j] - lower_bounds[j];
       //printf("%f:%f\n",upper_bounds[j],lower_bounds[j]);
@@ -534,16 +533,17 @@ void my_de_nopcm(evaluate_function_t evaluate_func,
         //   population[i][j] = floor(population[i][j] + 0.5);
         // }
       }
-      //printf("%lf ",population[i][j]);
+      // printf("%lf ",population[i][j]);
     }
-    // printf("aaa\n");
+    // printf("\n");
+    // printf("afterpop:");
     if(REPAIR == 0){
-      round_vec(population[i],dimension);
+      round_vec(population[i],dimension,lower_bounds,upper_bounds);
     }
     // for (j = 0; j < dimension; j++) {
     //   printf("%lf ",population[i][j]);
     // }
-    // printf("bbb\n");
+    // printf("\n");
     evaluate_func(population[i], functions_values);
     evaluation++;
     value_population[i] = functions_values[0];
@@ -609,7 +609,7 @@ void my_de_nopcm(evaluate_function_t evaluate_func,
           }
       }
       if(REPAIR == 0){
-        round_vec(trial[i],dimension);
+        round_vec(trial[i],dimension,lower_bounds,upper_bounds);
       }
     }
     if(number_of_constraints > 0 ){
