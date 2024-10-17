@@ -12,12 +12,11 @@
 #include <assert.h>
 
 #include "coco.h"
-
 #define max(a,b) ((a) > (b) ? (a) : (b))
 #define N 100
 #define REPAIR 0//0:lamarckian,1:baldwinian
-#define TITLE "5D-lamarckian-.txt"
-#define D 5
+#define TITLE "20D-lamarckian-.txt"
+#define D 20
 int instance_cnt = 0;
 /**
  * The maximal budget for evaluations done by an optimization algorithm equals dimension * BUDGET_MULTIPLIER.
@@ -203,6 +202,10 @@ void example_experiment(const char *suite_name,
     // if(function_id == 0){
       const char *function_name = coco_problem_get_name(PROBLEM);
       size_t dimension = coco_problem_get_dimension(PROBLEM);
+      
+      // for(int m = 0; m < dimention; m++){
+      //   printf("%lf ",bsf[i]);
+      // }
       //printf("%s\n",function_name);
       if(strstr(function_name, "f001") != NULL && dimension == D) {
         /* Run the algorithm at least once */

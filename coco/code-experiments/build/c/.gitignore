@@ -6,3 +6,5 @@ Makefile_win_gcc
 
 exdata/
 example_experiment
+
+venv/

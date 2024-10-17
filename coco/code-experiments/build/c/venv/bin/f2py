@@ -1,4 +1,4 @@
-#!/home/nimo/de/coco/code-experiments/build/c/venv/bin/python3
+#!/home/nimo/tanabe_lab/2024/de/DE/coco/code-experiments/build/c/venv/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys
