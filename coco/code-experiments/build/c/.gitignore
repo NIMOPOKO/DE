@@ -1,10 +1,7 @@
 coco.c
 coco.h
-
 Makefile
 Makefile_win_gcc
-
+venv/
 exdata/
 example_experiment
-
-venv/
